@@ -8,7 +8,7 @@ Taxpr is a collection of utilities for performing manipulation of Jaxprs. This i
 
     This package is still very experimental, so expect broken code and breaking changes.
 
-# Get started
+# Getting started
 
 Install via pip:
 
@@ -16,7 +16,7 @@ Install via pip:
 pip install -U taxpr
 ```
 
-## Examples
+## Example
 
 The following example shows how you can use taxpr to emulate functions with side effects without violating Jax's pure function rules.
 ```python

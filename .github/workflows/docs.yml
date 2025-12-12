@@ -22,6 +22,10 @@ jobs:
           python-version: 3.x
       - run: pip install zensical
       - run: zensical build --clean
+      - run: |
+            pwd
+            ls -la
+            ls -la site || true
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site

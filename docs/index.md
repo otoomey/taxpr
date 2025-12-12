@@ -1,40 +1,23 @@
-Metadata-Version: 2.4
-Name: taxpr
-Version: 0.0.1
-Summary: A small example package
-Author: Oscar Toomey
-License-Expression: MIT
-Project-URL: Homepage, https://github.com/otoomey/taxpr
-Project-URL: Issues, https://github.com/otoomey/taxpr/issues
-Classifier: Programming Language :: Python :: 3
-Classifier: Operating System :: OS Independent
-Requires-Python: >=3.9
-Description-Content-Type: text/markdown
-License-File: LICENSE
-Requires-Dist: jax>=0.8.0
-Requires-Dist: jaxtyping>=0.2.20
-Provides-Extra: dev
-Requires-Dist: pre-commit; extra == "dev"
-Provides-Extra: docs
-Requires-Dist: hippogriffe==0.2.2; extra == "docs"
-Requires-Dist: griffe==1.7.3; extra == "docs"
-Requires-Dist: mkdocs==1.6.1; extra == "docs"
-Requires-Dist: mkdocs-material==9.6.7; extra == "docs"
-Requires-Dist: mkdocstrings==0.28.3; extra == "docs"
-Requires-Dist: mkdocstrings-python==1.16.8; extra == "docs"
-Provides-Extra: tests
-Requires-Dist: jaxlib; extra == "tests"
-Requires-Dist: pytest; extra == "tests"
-Dynamic: license-file
+---
+icon: lucide/rocket
+---
 
-# Taxpr
 Taxpr is a collection of utilities for performing manipulation of Jaxprs. This is achieved by `tag`-ing specific arrays at trace time, then extracting and manipulating those tags in the final Jaxpr.
 
-> ⚠️ This package is still very experimental, so expect broken code and breaking changes.
+!!! warning
 
-The provided routines are designed to work seamlessly with `jit`, `vmap`, `custom_jvp` and cousins.
+    This package is still very experimental, so expect broken code and breaking changes.
 
-## Example
+# Get started
+
+Install via pip:
+
+```bash hl_lines="2" title="Installation"
+pip install -U taxpr
+```
+
+## Examples
+
 The following example shows how you can use taxpr to emulate functions with side effects without violating Jax's pure function rules.
 ```python
 import itertools as it

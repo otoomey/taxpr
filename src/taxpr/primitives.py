@@ -86,7 +86,13 @@ def dissolve_tags(
     predicate: Callable[[dict[str, Any], PyTree[AbstractValue]], bool] | None = None,
 ) -> core.Jaxpr:
     """
-    Remove all tags from the given JAXPR.
+    Remove all tags from the given jaxpr.
+
+    This will traverse the given jaxpr and all nested jaxprs, removing:
+
+    - all tags if `predicate == None`
+    - all tags for which `predicate(..) == True`
+
     Args:
         jaxpr: A JAXPR potentially containing tagged primitives.
         predicate: An optional function that takes tag parameters and the token shape and returns True
@@ -160,8 +166,10 @@ def iter_tags(
 ) -> Iterator[tuple[dict[str, Any], PyTree[AbstractValue]]]:
     """
     Iterate over all tags in the given JAXPR.
+
     Args:
         jaxpr: A JAXPR potentially containing tagged primitives.
+
     Yields:
         Tuples of (parameters, ShapeDtypeStruct | None) for each tag.
     """
@@ -194,14 +202,17 @@ def inject[Ctx](
 ) -> core.ClosedJaxpr:
     """
     Inject tags into the given JAXPR using the provided injector function.
+
     Args:
-        jaxpr: A JAXPR potentially containing tagged primitives.
+        closed_jaxpr: A closed JAXPR potentially containing tagged primitives.
         injector: A function that takes the context, the token, and tag parameters,
                     and returns a new token and mofied context. The injector is converted
                     to a JAXPR internally and inlined at each tag point.
         ctx: The initial context to pass to the injector.
+
+
     Returns:
-        A new JAXPR with the injector inlined at each tag point. The modified jaxpr also returns
+        A new closed JAXPR with the injector inlined at each tag point. The modified jaxpr also returns
         the final context as an additional output.
     """
     # Convert context leaves to arrays so they can be traced through make_jaxpr
@@ -221,9 +232,11 @@ def inject[Ctx](
     # Helper function to transform a single jaxpr, with a flag to control signature modification
     def transform_jaxpr(jaxpr: core.Jaxpr, modify_signature: bool = True):
         """Transform a jaxpr to inject tags and thread context through it.
+
         Args:
             jaxpr: The jaxpr to transform
             modify_signature: If True, add context to invars/outvars; if False, keep signature unchanged
+
         Returns: (new_jaxpr, final_ctx_vars, accumulated_consts)
         """
         new_invars: list[core.Var] = list(ctx_vars) + list(jaxpr.invars) if modify_signature else list(jaxpr.invars)

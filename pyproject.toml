@@ -27,6 +27,10 @@ Issues = "https://github.com/otoomey/taxpr/issues"
 dev = [
   "pre-commit"
 ]
+docs = [
+  "zensical==0.0.11",
+  "mkdocstrings-python==2.0.1"
+]
 tests = [
   "jaxlib",
   "pytest"

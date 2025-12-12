@@ -33,4 +33,4 @@ jobs:
 
       - name: Check that documentation can be built.
         run: |
-          mkdocs build
+          zensical build --clean

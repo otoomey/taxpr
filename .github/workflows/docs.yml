@@ -20,12 +20,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: pip install zensical
+      - name: Install docs dependencies
+        run: |
+          pip install -e '.[docs]'
       - run: zensical build --clean
-      - run: |
-            pwd
-            ls -la
-            ls -la site || true
+      - name: Verify site contents
+        run: |
+          ls -R site
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site

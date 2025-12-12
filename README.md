@@ -1,4 +1,6 @@
 # Taxpr
+[![Run tests](https://github.com/otoomey/taxpr/actions/workflows/run_tests.yml/badge.svg)](https://github.com/otoomey/taxpr/actions/workflows/run_tests.yml)
+
 Taxpr is a collection of utilities for performing manipulation of Jaxprs. This is achieved by `tag`-ing specific arrays at trace time, then extracting and manipulating those tags in the final Jaxpr.
 
 > ⚠️ This package is still very experimental, so expect broken code and breaking changes.

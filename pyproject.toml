@@ -22,3 +22,12 @@ dependencies = ["jax>=0.8.0", "jaxtyping>=0.2.20"]
 [project.urls]
 Homepage = "https://github.com/otoomey/taxpr"
 Issues = "https://github.com/otoomey/taxpr/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pre-commit"
+]
+tests = [
+  "jaxlib",
+  "pytest"
+]

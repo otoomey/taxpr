@@ -64,36 +64,3 @@ def rewrite_vars(jaxpr: core.Jaxpr, varmap: Mapping[core.Var, core.Var]):
     return core.Jaxpr(jaxpr.constvars, new_invars, new_outvars, new_eqns, jaxpr.effects, jaxpr.debug_info, jaxpr.is_high)
 
 
-def apply_to_jaxpr(fn, jaxpr: core.Jaxpr):
-    """Recursively apply a function to a jaxpr and all nested jaxprs in its parameters."""
-    new_eqns = []
-    for eqn in jaxpr.eqns:
-        # Process nested jaxprs in parameters
-        new_params = {}
-        for param_name, param_val in eqn.params.items():
-            if isinstance(param_val, core.Jaxpr):
-                new_params[param_name] = apply_to_jaxpr(fn, param_val)
-            elif isinstance(param_val, core.ClosedJaxpr):
-                new_inner_jaxpr = apply_to_jaxpr(fn, param_val.jaxpr)
-                new_params[param_name] = core.ClosedJaxpr(new_inner_jaxpr, param_val.consts)
-            elif isinstance(param_val, (tuple, list)):
-                new_param_items = []
-                for item in param_val:
-                    if isinstance(item, core.Jaxpr):
-                        new_param_items.append(apply_to_jaxpr(fn, item))
-                    elif isinstance(item, core.ClosedJaxpr):
-                        new_inner_jaxpr = apply_to_jaxpr(fn, item.jaxpr)
-                        new_param_items.append(core.ClosedJaxpr(new_inner_jaxpr, item.consts))
-                    else:
-                        new_param_items.append(item)
-                new_params[param_name] = type(param_val)(new_param_items) if isinstance(param_val, list) else tuple(new_param_items)
-            else:
-                new_params[param_name] = param_val
-        
-        new_eqn = eqn.replace(params=new_params)
-        new_eqn = fn(new_eqn)
-        new_eqns.append(new_eqn)
-    
-    return core.Jaxpr(jaxpr.constvars, jaxpr.invars, jaxpr.outvars, new_eqns, jaxpr.effects, jaxpr.debug_info, jaxpr.is_high)
-
-

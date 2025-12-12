@@ -1,14 +1,14 @@
 from collections.abc import Iterator
-from typing import Any, Callable, NamedTuple, overload
+from typing import Any, Callable, overload
 import jax
 from jaxtyping import Array, PyTree
-from jax._src.core import AbstractValue, Atom, ShapedArray
+from jax._src.core import AbstractValue, ShapedArray
 from jax.interpreters import ad, batching
-import jax.extend.core as core
+from jax.extend import core
+from jax.core import Atom
 from jax.typing import ArrayLike
-from numpy import inner
 
-from taxpr.dfg import rewrite_invars, rewrite_vars, apply_to_jaxpr
+from taxpr.dfg import rewrite_invars, rewrite_vars
 
 tag_p = core.Primitive("tag")
 

@@ -1,4 +1,3 @@
-import pytest
 import jax
 import jax.numpy as jnp
 from jax._src.core import ShapedArray, eval_jaxpr

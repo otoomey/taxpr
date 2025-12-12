@@ -17,6 +17,7 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
+dependencies = ["jax>=0.8.0", "jaxtyping>=0.2.20"]
 
 [project.urls]
 Homepage = "https://github.com/otoomey/taxpr"

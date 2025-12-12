@@ -255,8 +255,8 @@ def test_inject_with_context():
     
     # Injector that increments context
     def injector(ctx, token, params):
-        # token is a tuple (the flattened token)
-        ctx = ctx + token[0]
+        # token is now in its original structure (scalar in this case)
+        ctx = ctx + token
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0.0))

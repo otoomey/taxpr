@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from typing import Any, Callable, NamedTuple
+from typing import Any, Callable, NamedTuple, overload
 import jax
 from jaxtyping import Array, PyTree
 from jax._src.core import AbstractValue, Atom, ShapedArray
@@ -21,10 +21,7 @@ def _tag_p_abstract_eval(*token, user_params, structure):
 
 def _tag_p_jvp(primals, tangents, **params):
     # primals is a tuple when multiple_results=True
-    primals_out = tag_p.bind(*primals, **params) if isinstance(primals, tuple) else tag_p.bind(primals, **params)
-    # Ensure primals_out is always a tuple
-    if not isinstance(primals_out, tuple):
-        primals_out = (primals_out,)
+    primals_out = tag_p.bind(primals, **params)
     # Ensure tangents is always a tuple
     if not isinstance(tangents, tuple):
         tangents = (tangents,)
@@ -47,10 +44,30 @@ tag_p.multiple_results = True
 ad.primitive_jvps[tag_p] = _tag_p_jvp
 batching.primitive_batchers[tag_p] = _tag_p_batch
 
+@overload
+def tag(token: ArrayLike, **params) -> ArrayLike:
+    ...
 
-def tag(*token, **params) -> ArrayLike:
+@overload
+def tag(token: tuple[Array], **params) -> tuple[Array]:
+    ...
+
+@overload
+def tag(token: list[Array], **params) -> list[Array]:
+    ...
+
+@overload
+def tag(token: PyTree[Array], **params) -> PyTree[Array]:
+    ...
+
+def tag(token, **params) -> ArrayLike | PyTree[Array]:
     """
     Tag a specific point in a computation with given parameters.
+
+    Note: You must consume the output of this function for the tag to appear
+    in the JAXPR. Simply calling this function without using its output
+    may lead to the tag being optimized away.
+
     Args:
         token: An input token representing a point in the computation.
         **params: Arbitrary keyword parameters to associate with the tag.
@@ -62,11 +79,7 @@ def tag(*token, **params) -> ArrayLike:
     # Sort to ensure consistent ordering
     user_params = tuple(sorted(params.items()))
     result = tag_p.bind(*leaves, user_params=user_params, structure=structure)
-    if len(token) == 1:
-        return result[0]
-    else:
-        return tuple(result)
-
+    return jax.tree.unflatten(structure, result)
 
 def dissolve_tags(
     jaxpr: core.Jaxpr,
@@ -139,7 +152,7 @@ def dissolve_tags(
             params = dict(zip(eqn.params.keys(), param_vals))
             new_eqns.append(eqn.replace(invars=list(invars), params=params))
 
-    return core.Jaxpr(jaxpr.constvars, jaxpr.invars, jaxpr.outvars, new_eqns, eqn.effects, jaxpr.debug_info, jaxpr.is_high)
+    return core.Jaxpr(jaxpr.constvars, jaxpr.invars, jaxpr.outvars, new_eqns, jaxpr.effects, jaxpr.debug_info, jaxpr.is_high)
 
 
 def iter_tags(
@@ -195,12 +208,10 @@ def inject[Ctx](
     ctx = jax.tree.map(lambda x: jax.numpy.array(x), ctx)
     
     # Flatten context to get individual variables
-    ctx_flattened = jax.tree.leaves(
-        ctx, is_leaf=lambda x: isinstance(x, (jax.Array, jax.ShapeDtypeStruct))
-    )
+    ctx_flattened = jax.tree.leaves(ctx)
     
     # Create Var objects for context leaves
-    ctx_vars: list[Atom] = []
+    ctx_vars: list[core.Var] = []
     for ctx_leaf in ctx_flattened:
         var = core.Var(ShapedArray(ctx_leaf.shape, ctx_leaf.dtype))
         ctx_vars.append(var)
@@ -208,7 +219,7 @@ def inject[Ctx](
     ctx_len = len(ctx_vars)
     
     # Helper function to transform a single jaxpr, with a flag to control signature modification
-    def transform_jaxpr(jaxpr: core.Jaxpr, modify_signature: bool = True) -> tuple[core.Jaxpr, list[Atom], list[Any]]:
+    def transform_jaxpr(jaxpr: core.Jaxpr, modify_signature: bool = True):
         """Transform a jaxpr to inject tags and thread context through it.
         Args:
             jaxpr: The jaxpr to transform
@@ -263,19 +274,21 @@ def inject[Ctx](
             
             if eqn.primitive is tag_p:
                 eqn = rewrite_invars(eqn, varmap)
-                # Extract abstract values from Var objects and unflatten to original structure
+                # Extract abstract values from Var objects - these are the flattened leaves
                 avals = [v.aval for v in eqn.invars]
-                inshape = jax.tree.unflatten(eqn.params["structure"], avals)
+                # Create leaf examples for tracing
+                # Unflatten to get the original structure for type hints
+                structure = eqn.params["structure"]
+                inshape = jax.tree.unflatten(structure, avals)
                 
                 # Create a wrapper that captures params 
                 params_dict = dict(eqn.params["user_params"])
-                def injector_wrapper(c, t, user_params):
-                    result_token, result_ctx = injector(c, t, user_params)
-                    return result_token, result_ctx
-                
                 # Trace through the injector with current ctx and token shape
-                def wrapper(c, t):
-                    return injector_wrapper(c, t, params_dict)
+                # The token should be in the same format as what tag receives (unflattened)
+                def wrapper(c, *token_leaves):
+                    # Reconstruct the token in its original structure
+                    token = jax.tree.unflatten(structure, token_leaves)
+                    return injector(c, token, params_dict)
 
                 inner_closed_jaxpr = jax.make_jaxpr(wrapper)(ctx, inshape)
                 inner_jaxpr: core.Jaxpr = inner_closed_jaxpr.jaxpr
@@ -303,7 +316,7 @@ def inject[Ctx](
 
         new_outvars: list[Atom] = []
         for outvar in jaxpr.outvars:
-            if outvar in varmap:
+            if isinstance(outvar, core.Var) and outvar in varmap:
                 new_outvars.append(varmap[outvar])
             else:
                 new_outvars.append(outvar)

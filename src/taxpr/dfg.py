@@ -32,10 +32,8 @@ def inline_jaxpr(eqn: core.JaxprEqn):
     """Inline a jaxpr contained in an equation."""
     assert 'jaxpr' in eqn.params, "Equation does not contain a jaxpr to inline."
     inner_jaxpr = eqn.params['jaxpr']
-    ctx_len = eqn.params.get('ctx_len', 0)
 
     varmap = {}
-    new_eqns = []
 
     # Map the invars
     for invar, inner_invar in zip(eqn.invars, inner_jaxpr.invars):

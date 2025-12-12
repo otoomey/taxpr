@@ -120,23 +120,25 @@ def test_iter_tags_no_tags():
 
 # Tests for dissolve_tags
 
+
 def test_dissolve_tags_single():
     """Test dissolving a single tag from a Jaxpr."""
+
     def fn(x):
         tagged = tag(x + 1, op="test", id=1)
         return tagged * 2
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
-    
+
     # Before dissolving, should have a tag
     tags_before = list(iter_tags(closed.jaxpr))
     assert len(tags_before) == 1
-    
+
     # After dissolving, should have no tags
     dissolved = dissolve_tags(closed.jaxpr)
     tags_after = list(iter_tags(dissolved))
     assert len(tags_after) == 0
-    
+
     # Result should be the same
     result_before = eval_jaxpr(closed.jaxpr, closed.consts, jnp.array(2.0))[0]
     result_after = eval_jaxpr(dissolved, closed.consts, jnp.array(2.0))[0]
@@ -145,6 +147,7 @@ def test_dissolve_tags_single():
 
 def test_dissolve_tags_multiple():
     """Test dissolving multiple tags from a Jaxpr."""
+
     def fn(x):
         t1 = tag(x + 1, op="add", id=1)
         t2 = tag(t1 * 2, op="mul", id=2)
@@ -153,7 +156,7 @@ def test_dissolve_tags_multiple():
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
     tags_before = list(iter_tags(closed.jaxpr))
     assert len(tags_before) == 2
-    
+
     dissolved = dissolve_tags(closed.jaxpr)
     tags_after = list(iter_tags(dissolved))
     assert len(tags_after) == 0
@@ -161,20 +164,21 @@ def test_dissolve_tags_multiple():
 
 def test_dissolve_tags_with_predicate():
     """Test dissolving tags based on a predicate."""
+
     def fn(x):
         t1 = tag(x + 1, op="keep", id=1)
         t2 = tag(t1 * 2, op="remove", id=2)
         return t2 + 3
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
-    
+
     # Dissolve only tags with op="remove"
     def predicate(params, shape):
         return params["op"] == "remove"
-    
+
     dissolved = dissolve_tags(closed.jaxpr, predicate=predicate)
     tags_after = list(iter_tags(dissolved))
-    
+
     # Should have one tag left (the "keep" one)
     assert len(tags_after) == 1
     assert tags_after[0][0]["op"] == "keep"
@@ -182,12 +186,13 @@ def test_dissolve_tags_with_predicate():
 
 def test_dissolve_tags_no_tags():
     """Test dissolving when there are no tags."""
+
     def fn(x):
         return x * 2
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
     dissolved = dissolve_tags(closed.jaxpr)
-    
+
     # Should execute without error
     result = eval_jaxpr(dissolved, closed.consts, jnp.array(2.0))[0]
     assert jnp.allclose(result, jnp.array(4.0))
@@ -195,6 +200,7 @@ def test_dissolve_tags_no_tags():
 
 def test_dissolve_tags_jit():
     """Test dissolving tags in a JIT-compiled function."""
+
     @jax.jit
     def fn(x):
         return tag(x * 2, op="jit", id=7)
@@ -202,7 +208,7 @@ def test_dissolve_tags_jit():
     closed = jax.make_jaxpr(fn)(jnp.array(1.0))
     tags_before = list(iter_tags(closed.jaxpr))
     assert len(tags_before) > 0
-    
+
     dissolved = dissolve_tags(closed.jaxpr)
     tags_after = list(iter_tags(dissolved))
     assert len(tags_after) == 0
@@ -210,12 +216,13 @@ def test_dissolve_tags_jit():
 
 def test_dissolve_tags_vmap():
     """Test dissolving tags in a vmap'd function."""
+
     def fn(x):
         return tag(x * 4, op="vmap", id=8)
 
     vmapped = jax.vmap(fn)
     closed = jax.make_jaxpr(vmapped)(jnp.ones((3,)))
-    
+
     dissolved = dissolve_tags(closed.jaxpr)
     tags_after = list(iter_tags(dissolved))
     assert len(tags_after) == 0
@@ -223,21 +230,25 @@ def test_dissolve_tags_vmap():
 
 # Tests for inject
 
+
 def test_inject_basic():
     """Test basic injection of a tag with a simple identity injector."""
+
     def fn(x):
         return tag(x + 1.0, op="test", id=1) * 2
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
-    
+
     # Simple injector that just returns the value unchanged
     def injector(ctx, token, params):
         ctx = ctx + 1
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0))
-    result, ctx = eval_jaxpr(injected.jaxpr, injected.consts, jnp.array(0), jnp.array([0.0, 0.0]))
-    
+    result, ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0), jnp.array([0.0, 0.0])
+    )
+
     # Should have called the injector
     assert ctx == 1
     # Result should be the same
@@ -246,12 +257,13 @@ def test_inject_basic():
 
 def test_inject_with_context():
     """Test injection with context mutation."""
+
     def fn(x):
         t1 = tag(x, op="set", id=1)
         return t1 + 1
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
-    
+
     # Injector that increments context
     def injector(ctx, token, params):
         # token is now in its original structure (scalar in this case)
@@ -259,8 +271,10 @@ def test_inject_with_context():
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0.0))
-    result, final_ctx = eval_jaxpr(injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0))
-    
+    result, final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0)
+    )
+
     # Context should be updated by adding the token (2.0)
     assert jnp.allclose(final_ctx, jnp.array(2.0))
     # Result should be x + 1 where x = 2.0, so 3.0
@@ -269,21 +283,25 @@ def test_inject_with_context():
 
 def test_inject_multiple_tags():
     """Test injection with multiple tags."""
+
     def fn(x):
         t1 = tag(x, op="get", id=1)
         t2 = tag(t1 + 1, op="set", id=2)
         return t2
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
-    
+
     injector_calls = []
+
     def injector(ctx, token, params):
         injector_calls.append(params["op"])
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0.0))
-    result, final_ctx = eval_jaxpr(injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0))
-    
+    result, final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0)
+    )
+
     # Should have called injector for both tags
     assert len(injector_calls) == 2
     assert "get" in injector_calls
@@ -292,19 +310,23 @@ def test_inject_multiple_tags():
 
 def test_inject_no_tags():
     """Test injection when there are no tags."""
+
     def fn(x):
         return x * 2
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
-    
+
     call_count = [0]
+
     def injector(ctx, token, params):
         call_count[0] += 1
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0.0))
-    result, final_ctx = eval_jaxpr(injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0))
-    
+    result, final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0)
+    )
+
     # Injector should not be called
     assert call_count[0] == 0
     assert jnp.allclose(result, jnp.array(4.0))
@@ -312,46 +334,55 @@ def test_inject_no_tags():
 
 def test_inject_jit():
     """Test injection in a JIT-compiled function."""
+
     @jax.jit
     def fn(x):
         return tag(x * 2, op="jit", id=7)
 
     closed = jax.make_jaxpr(fn)(jnp.array(1.0))
-    
+
     call_count = [0]
+
     def injector(ctx, token, params):
         call_count[0] += 1
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0.0))
-    result, final_ctx = eval_jaxpr(injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(1.0))
-    
+    result, final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(1.0)
+    )
+
     # Injector should be called
     assert call_count[0] > 0
 
 
 def test_inject_vmap():
     """Test injection in a vmap'd function."""
+
     def fn(x):
         return tag(x * 4, op="vmap", id=8)
 
     vmapped = jax.vmap(fn)
     closed = jax.make_jaxpr(vmapped)(jnp.ones((3,)))
-    
+
     call_count = [0]
+
     def injector(ctx, token, params):
         call_count[0] += 1
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0.0))
-    result, final_ctx = eval_jaxpr(injected.jaxpr, injected.consts, jnp.array(0.0), jnp.ones((3,)))
-    
+    result, final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.ones((3,))
+    )
+
     # Injector should be called
     assert call_count[0] > 0
 
 
 def test_inject_custom_jvp():
     """Test injection in a custom_jvp function."""
+
     @jax.custom_jvp
     def fn(x):
         return tag(x * 2, op="cjvp", id=10)
@@ -363,14 +394,17 @@ def test_inject_custom_jvp():
         return tag(x * 2, op="cjvp", id=10), tag(2 * t, op="cjvp", id=10)
 
     closed = jax.make_jaxpr(fn)(jnp.array(2.0))
-    
+
     call_count = [0]
+
     def injector(ctx, token, params):
         call_count[0] += 1
         return token, ctx
 
     injected = inject(closed, injector, jnp.array(0.0))
-    result, final_ctx = eval_jaxpr(injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0))
-    
+    result, final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0)
+    )
+
     # Injector should be called
     assert call_count[0] > 0

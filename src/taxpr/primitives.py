@@ -12,8 +12,10 @@ from taxpr.dfg import rewrite_invars, rewrite_vars
 
 tag_p = core.Primitive("tag")
 
+
 def _tag_p_impl(*token, user_params, structure):
     return tuple(token)
+
 
 def _tag_p_abstract_eval(*token, user_params, structure):
     return tuple(token)
@@ -44,21 +46,22 @@ tag_p.multiple_results = True
 ad.primitive_jvps[tag_p] = _tag_p_jvp
 batching.primitive_batchers[tag_p] = _tag_p_batch
 
-@overload
-def tag(token: ArrayLike, **params) -> ArrayLike:
-    ...
 
 @overload
-def tag(token: tuple[Array], **params) -> tuple[Array]:
-    ...
+def tag(token: ArrayLike, **params) -> ArrayLike: ...
+
 
 @overload
-def tag(token: list[Array], **params) -> list[Array]:
-    ...
+def tag(token: tuple[Array], **params) -> tuple[Array]: ...
+
 
 @overload
-def tag(token: PyTree[Array], **params) -> PyTree[Array]:
-    ...
+def tag(token: list[Array], **params) -> list[Array]: ...
+
+
+@overload
+def tag(token: PyTree[Array], **params) -> PyTree[Array]: ...
+
 
 def tag(token, **params) -> ArrayLike | PyTree[Array]:
     """
@@ -80,6 +83,7 @@ def tag(token, **params) -> ArrayLike | PyTree[Array]:
     user_params = tuple(sorted(params.items()))
     result = tag_p.bind(*leaves, user_params=user_params, structure=structure)
     return jax.tree.unflatten(structure, result)
+
 
 def dissolve_tags(
     jaxpr: core.Jaxpr,
@@ -136,20 +140,28 @@ def dissolve_tags(
                 if isinstance(p, core.Jaxpr):
                     param_vals.append(dissolve_tags(p))
                 elif isinstance(p, core.ClosedJaxpr):
-                    param_vals.append(core.ClosedJaxpr(dissolve_tags(p.jaxpr), p.consts))
+                    param_vals.append(
+                        core.ClosedJaxpr(dissolve_tags(p.jaxpr), p.consts)
+                    )
                 elif isinstance(p, tuple):
                     param_vals.append(
                         tuple(
-                            dissolve_tags(x) if isinstance(x, core.Jaxpr) else
-                            core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts) if isinstance(x, core.ClosedJaxpr) else x
+                            dissolve_tags(x)
+                            if isinstance(x, core.Jaxpr)
+                            else core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
+                            if isinstance(x, core.ClosedJaxpr)
+                            else x
                             for x in p
                         )
                     )
                 elif isinstance(p, list):
                     param_vals.append(
                         list(
-                            dissolve_tags(x) if isinstance(x, core.Jaxpr) else
-                            core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts) if isinstance(x, core.ClosedJaxpr) else x
+                            dissolve_tags(x)
+                            if isinstance(x, core.Jaxpr)
+                            else core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
+                            if isinstance(x, core.ClosedJaxpr)
+                            else x
                             for x in p
                         )
                     )
@@ -158,7 +170,15 @@ def dissolve_tags(
             params = dict(zip(eqn.params.keys(), param_vals))
             new_eqns.append(eqn.replace(invars=list(invars), params=params))
 
-    return core.Jaxpr(jaxpr.constvars, jaxpr.invars, jaxpr.outvars, new_eqns, jaxpr.effects, jaxpr.debug_info, jaxpr.is_high)
+    return core.Jaxpr(
+        jaxpr.constvars,
+        jaxpr.invars,
+        jaxpr.outvars,
+        new_eqns,
+        jaxpr.effects,
+        jaxpr.debug_info,
+        jaxpr.is_high,
+    )
 
 
 def iter_tags(
@@ -217,18 +237,18 @@ def inject[Ctx](
     """
     # Convert context leaves to arrays so they can be traced through make_jaxpr
     ctx = jax.tree.map(lambda x: jax.numpy.array(x), ctx)
-    
+
     # Flatten context to get individual variables
     ctx_flattened = jax.tree.leaves(ctx)
-    
+
     # Create Var objects for context leaves
     ctx_vars: list[core.Var] = []
     for ctx_leaf in ctx_flattened:
         var = core.Var(ShapedArray(ctx_leaf.shape, ctx_leaf.dtype))
         ctx_vars.append(var)
-    
+
     ctx_len = len(ctx_vars)
-    
+
     # Helper function to transform a single jaxpr, with a flag to control signature modification
     def transform_jaxpr(jaxpr: core.Jaxpr, modify_signature: bool = True):
         """Transform a jaxpr to inject tags and thread context through it.
@@ -239,52 +259,88 @@ def inject[Ctx](
 
         Returns: (new_jaxpr, final_ctx_vars, accumulated_consts)
         """
-        new_invars: list[core.Var] = list(ctx_vars) + list(jaxpr.invars) if modify_signature else list(jaxpr.invars)
+        new_invars: list[core.Var] = (
+            list(ctx_vars) + list(jaxpr.invars)
+            if modify_signature
+            else list(jaxpr.invars)
+        )
         new_consts: list[Any] = []
         new_constvars: list[core.Var] = list(jaxpr.constvars)
         new_eqns = []
-        
+
         current_ctx_vars = list(ctx_vars)
         varmap = {}
-        
+
         for eqn in jaxpr.eqns:
             # First recursively process nested jaxprs in parameters
             new_params = {}
             for param_name, param_val in eqn.params.items():
                 if isinstance(param_val, core.Jaxpr):
                     # Recursively transform nested jaxpr - don't modify signature for nested jaxprs
-                    inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(param_val, modify_signature=False)
+                    inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                        param_val, modify_signature=False
+                    )
                     new_params[param_name] = inner_jaxpr
                     new_consts.extend(inner_consts)
-                    new_constvars.extend([v for v in inner_jaxpr.constvars if v not in new_constvars])
+                    new_constvars.extend(
+                        [v for v in inner_jaxpr.constvars if v not in new_constvars]
+                    )
                 elif isinstance(param_val, core.ClosedJaxpr):
-                    inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(param_val.jaxpr, modify_signature=False)
+                    inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                        param_val.jaxpr, modify_signature=False
+                    )
                     new_consts.extend(inner_consts)
                     new_consts.extend(param_val.consts)
-                    new_constvars.extend([v for v in inner_jaxpr.constvars if v not in new_constvars])
-                    new_params[param_name] = core.ClosedJaxpr(inner_jaxpr, param_val.consts)
+                    new_constvars.extend(
+                        [v for v in inner_jaxpr.constvars if v not in new_constvars]
+                    )
+                    new_params[param_name] = core.ClosedJaxpr(
+                        inner_jaxpr, param_val.consts
+                    )
                 elif isinstance(param_val, (tuple, list)):
                     new_param_items = []
                     for item in param_val:
                         if isinstance(item, core.Jaxpr):
-                            inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(item, modify_signature=False)
+                            inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                                item, modify_signature=False
+                            )
                             new_param_items.append(inner_jaxpr)
                             new_consts.extend(inner_consts)
-                            new_constvars.extend([v for v in inner_jaxpr.constvars if v not in new_constvars])
+                            new_constvars.extend(
+                                [
+                                    v
+                                    for v in inner_jaxpr.constvars
+                                    if v not in new_constvars
+                                ]
+                            )
                         elif isinstance(item, core.ClosedJaxpr):
-                            inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(item.jaxpr, modify_signature=False)
+                            inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                                item.jaxpr, modify_signature=False
+                            )
                             new_consts.extend(inner_consts)
                             new_consts.extend(item.consts)
-                            new_constvars.extend([v for v in inner_jaxpr.constvars if v not in new_constvars])
-                            new_param_items.append(core.ClosedJaxpr(inner_jaxpr, item.consts))
+                            new_constvars.extend(
+                                [
+                                    v
+                                    for v in inner_jaxpr.constvars
+                                    if v not in new_constvars
+                                ]
+                            )
+                            new_param_items.append(
+                                core.ClosedJaxpr(inner_jaxpr, item.consts)
+                            )
                         else:
                             new_param_items.append(item)
-                    new_params[param_name] = type(param_val)(new_param_items) if isinstance(param_val, list) else tuple(new_param_items)
+                    new_params[param_name] = (
+                        type(param_val)(new_param_items)
+                        if isinstance(param_val, list)
+                        else tuple(new_param_items)
+                    )
                 else:
                     new_params[param_name] = param_val
-            
+
             eqn = eqn.replace(params=new_params)
-            
+
             if eqn.primitive is tag_p:
                 eqn = rewrite_invars(eqn, varmap)
                 # Extract abstract values from Var objects - these are the flattened leaves
@@ -293,9 +349,10 @@ def inject[Ctx](
                 # Unflatten to get the original structure for type hints
                 structure = eqn.params["structure"]
                 inshape = jax.tree.unflatten(structure, avals)
-                
-                # Create a wrapper that captures params 
+
+                # Create a wrapper that captures params
                 params_dict = dict(eqn.params["user_params"])
+
                 # Trace through the injector with current ctx and token shape
                 # The token should be in the same format as what tag receives (unflattened)
                 def wrapper(c, *token_leaves):
@@ -310,14 +367,18 @@ def inject[Ctx](
                 new_constvars.extend(list(inner_jaxpr.constvars))
 
                 inner_varmap = {}
-                for ctx_var, inner_ctx_var in zip(current_ctx_vars, inner_jaxpr.invars[:ctx_len]):
+                for ctx_var, inner_ctx_var in zip(
+                    current_ctx_vars, inner_jaxpr.invars[:ctx_len]
+                ):
                     inner_varmap[inner_ctx_var] = ctx_var
                 for invar, inner_invar in zip(eqn.invars, inner_jaxpr.invars[ctx_len:]):
                     inner_varmap[inner_invar] = invar
 
                 inner_jaxpr = rewrite_vars(inner_jaxpr, inner_varmap)
 
-                for outvar, inner_outvar in zip(eqn.outvars, inner_jaxpr.outvars[: -ctx_len]):
+                for outvar, inner_outvar in zip(
+                    eqn.outvars, inner_jaxpr.outvars[:-ctx_len]
+                ):
                     varmap[outvar] = inner_outvar
                 current_ctx_vars = inner_jaxpr.outvars[-ctx_len:]
 
@@ -338,14 +399,22 @@ def inject[Ctx](
             for var in current_ctx_vars:
                 new_outvars.append(var)
 
-        new_jaxpr = core.Jaxpr(new_constvars, new_invars, new_outvars, new_eqns, jaxpr.effects, jaxpr.debug_info, jaxpr.is_high)
+        new_jaxpr = core.Jaxpr(
+            new_constvars,
+            new_invars,
+            new_outvars,
+            new_eqns,
+            jaxpr.effects,
+            jaxpr.debug_info,
+            jaxpr.is_high,
+        )
         return new_jaxpr, current_ctx_vars, new_consts
-    
+
     # Transform the outer jaxpr with signature modification
     jaxpr = closed_jaxpr.jaxpr
     new_jaxpr, _, accumulated_consts = transform_jaxpr(jaxpr, modify_signature=True)
-    
+
     # Combine original constants with accumulated constants
     new_consts = list(closed_jaxpr.consts) + accumulated_consts
-    
+
     return core.ClosedJaxpr(new_jaxpr, new_consts)

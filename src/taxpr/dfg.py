@@ -15,6 +15,7 @@ def rewrite_invars(eqn: core.JaxprEqn, varmap: Mapping[core.Var, Atom]):
             invars.append(invar)
     return eqn.replace(invars=invars)
 
+
 def rewrite_outvars(eqn: core.JaxprEqn, varmap: Mapping[core.Var, Atom]):
     """Rewrite the outvars of an equation according to a variable mapping."""
     outvars = []
@@ -30,8 +31,8 @@ def rewrite_outvars(eqn: core.JaxprEqn, varmap: Mapping[core.Var, Atom]):
 
 def inline_jaxpr(eqn: core.JaxprEqn):
     """Inline a jaxpr contained in an equation."""
-    assert 'jaxpr' in eqn.params, "Equation does not contain a jaxpr to inline."
-    inner_jaxpr = eqn.params['jaxpr']
+    assert "jaxpr" in eqn.params, "Equation does not contain a jaxpr to inline."
+    inner_jaxpr = eqn.params["jaxpr"]
 
     varmap = {}
 
@@ -50,6 +51,7 @@ def inline_jaxpr(eqn: core.JaxprEqn):
             else:
                 inner_eqn_invars.append(invar)
 
+
 def rewrite_vars(jaxpr: core.Jaxpr, varmap: Mapping[core.Var, core.Var]):
     """Rewrite the invars and outvars of a jaxpr contained in an equation."""
     new_eqns = []
@@ -58,7 +60,16 @@ def rewrite_vars(jaxpr: core.Jaxpr, varmap: Mapping[core.Var, core.Var]):
         new_eqn = rewrite_outvars(new_eqn, varmap)
         new_eqns.append(new_eqn)
     new_invars = [varmap.get(var, var) for var in jaxpr.invars]
-    new_outvars = [varmap.get(var, var) if isinstance(var, core.Var) else var for var in jaxpr.outvars]
-    return core.Jaxpr(jaxpr.constvars, new_invars, new_outvars, new_eqns, jaxpr.effects, jaxpr.debug_info, jaxpr.is_high)
-
-
+    new_outvars = [
+        varmap.get(var, var) if isinstance(var, core.Var) else var
+        for var in jaxpr.outvars
+    ]
+    return core.Jaxpr(
+        jaxpr.constvars,
+        new_invars,
+        new_outvars,
+        new_eqns,
+        jaxpr.effects,
+        jaxpr.debug_info,
+        jaxpr.is_high,
+    )

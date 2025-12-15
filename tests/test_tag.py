@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from jax.core import eval_jaxpr, ShapedArray
 
-from taxpr.primitives import iter_tags, tag, dissolve_tags, inject
+from taxpr.tag import iter_tags, tag, dissolve_tags, inject
 
 
 def _collect_tags(fn, *args):

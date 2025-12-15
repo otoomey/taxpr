@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.core import eval_jaxpr
 
-from taxpr.primitives import tag, iter_tags, dissolve_tags, inject
+from taxpr.tag import tag, iter_tags, dissolve_tags, inject
 
 
 # ============================================================================

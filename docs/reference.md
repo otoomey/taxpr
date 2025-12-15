@@ -6,8 +6,9 @@ icon: lucide/code
 
 ## High level routines
 
-::: taxpr.primitives
+::: taxpr.tag
+::: taxpr.dfg
 
 ## Internal
 
-::: taxpr.dfg
+::: taxpr.util

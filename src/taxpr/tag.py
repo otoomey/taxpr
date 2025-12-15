@@ -231,7 +231,7 @@ def inject[Ctx](
     ctx = jax.tree.map(lambda x: jax.numpy.array(x), ctx)
 
     # Flatten context to get individual variables
-    ctx_flattened, ctx_struct = jax.tree.structure(ctx)
+    ctx_flattened, ctx_struct = jax.tree.flatten(ctx)
 
     # Create Var objects for context leaves
     ctx_vars: list[core.Var] = []

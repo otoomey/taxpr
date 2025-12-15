@@ -1,5 +1,6 @@
 # Taxpr
 [![Run tests](https://github.com/otoomey/taxpr/actions/workflows/run_tests.yml/badge.svg)](https://github.com/otoomey/taxpr/actions/workflows/run_tests.yml)
+[![PyPI Version](https://img.shields.io/pypi/v/taxpr.svg)](https://pypi.python.org/pypi/taxpr)
 
 Taxpr is a collection of utilities for performing manipulation of Jaxprs. This is achieved by `tag`-ing specific arrays at trace time, then extracting and manipulating those tags in the final Jaxpr.
 

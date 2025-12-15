@@ -1,11 +1,11 @@
+from typing import Any
 import jax
 import jax.numpy as jnp
-from jax._src.lib import err
 from jax._src.tree_util import equality_errors
+
 from jaxtyping import ArrayLike, PyTree
 
-
-def assert_tree_match(struct1, struct2):
+def assert_tree_match(struct1: Any, struct2: Any):
     """Asserts that two JAX tree structures are the same."""
     errors = list(equality_errors(struct1, struct2))
     if len(errors) > 0:

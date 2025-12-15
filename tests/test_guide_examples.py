@@ -4,11 +4,9 @@ Tests for examples from the usage guide.
 These tests verify that all code examples in docs/guide.md work correctly.
 """
 
-import itertools as it
 import jax
 import jax.numpy as jnp
-from jax._src.core import eval_jaxpr
-import pytest
+from jax.core import eval_jaxpr
 
 from taxpr.primitives import tag, iter_tags, dissolve_tags, inject
 

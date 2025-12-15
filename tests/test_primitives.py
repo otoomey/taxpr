@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from jax._src.core import ShapedArray, eval_jaxpr
+from jax.core import eval_jaxpr, ShapedArray
 
 from taxpr.primitives import iter_tags, tag, dissolve_tags, inject
 

@@ -1,14 +1,14 @@
 from collections.abc import Iterator
-from typing import Any, Callable, overload
+from typing import Any, Callable
 import jax
 from jaxtyping import Array, PyTree
-from jax._src.core import AbstractValue, ShapedArray
+from jax.core import ShapedArray, AbstractValue
 from jax.interpreters import ad, batching
 from jax.extend import core
 from jax.core import Atom
-from jax.typing import ArrayLike
 
 from taxpr.dfg import rewrite_invars, rewrite_vars
+from taxpr.util import assert_tree_match
 
 tag_p = core.Primitive("tag")
 
@@ -47,23 +47,7 @@ ad.primitive_jvps[tag_p] = _tag_p_jvp
 batching.primitive_batchers[tag_p] = _tag_p_batch
 
 
-@overload
-def tag(token: ArrayLike, **params) -> ArrayLike: ...
-
-
-@overload
-def tag(token: tuple[Array], **params) -> tuple[Array]: ...
-
-
-@overload
-def tag(token: list[Array], **params) -> list[Array]: ...
-
-
-@overload
-def tag(token: PyTree[Array], **params) -> PyTree[Array]: ...
-
-
-def tag(token, **params) -> ArrayLike | PyTree[Array]:
+def tag[T](token: T, **params) -> T:
     """
     Tag a specific point in a computation with given parameters.
 
@@ -72,7 +56,7 @@ def tag(token, **params) -> ArrayLike | PyTree[Array]:
     may lead to the tag being optimized away.
 
     Args:
-        token: An input token representing a point in the computation.
+        token: An input token representing a point in the computation. The token can be any PyTree of JAX arrays.
         **params: Arbitrary keyword parameters to associate with the tag.
     Returns:
         The unchanged input token tagged with the provided parameters.
@@ -146,22 +130,30 @@ def dissolve_tags(
                 elif isinstance(p, tuple):
                     param_vals.append(
                         tuple(
-                            dissolve_tags(x)
-                            if isinstance(x, core.Jaxpr)
-                            else core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
-                            if isinstance(x, core.ClosedJaxpr)
-                            else x
+                            (
+                                dissolve_tags(x)
+                                if isinstance(x, core.Jaxpr)
+                                else (
+                                    core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
+                                    if isinstance(x, core.ClosedJaxpr)
+                                    else x
+                                )
+                            )
                             for x in p
                         )
                     )
                 elif isinstance(p, list):
                     param_vals.append(
                         list(
-                            dissolve_tags(x)
-                            if isinstance(x, core.Jaxpr)
-                            else core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
-                            if isinstance(x, core.ClosedJaxpr)
-                            else x
+                            (
+                                dissolve_tags(x)
+                                if isinstance(x, core.Jaxpr)
+                                else (
+                                    core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
+                                    if isinstance(x, core.ClosedJaxpr)
+                                    else x
+                                )
+                            )
                             for x in p
                         )
                     )
@@ -239,7 +231,7 @@ def inject[Ctx](
     ctx = jax.tree.map(lambda x: jax.numpy.array(x), ctx)
 
     # Flatten context to get individual variables
-    ctx_flattened = jax.tree.leaves(ctx)
+    ctx_flattened, ctx_struct = jax.tree.structure(ctx)
 
     # Create Var objects for context leaves
     ctx_vars: list[core.Var] = []
@@ -277,7 +269,7 @@ def inject[Ctx](
             for param_name, param_val in eqn.params.items():
                 if isinstance(param_val, core.Jaxpr):
                     # Recursively transform nested jaxpr - don't modify signature for nested jaxprs
-                    inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                    inner_jaxpr, _, inner_consts = transform_jaxpr(
                         param_val, modify_signature=False
                     )
                     new_params[param_name] = inner_jaxpr
@@ -286,7 +278,7 @@ def inject[Ctx](
                         [v for v in inner_jaxpr.constvars if v not in new_constvars]
                     )
                 elif isinstance(param_val, core.ClosedJaxpr):
-                    inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                    inner_jaxpr, _, inner_consts = transform_jaxpr(
                         param_val.jaxpr, modify_signature=False
                     )
                     new_consts.extend(inner_consts)
@@ -301,7 +293,7 @@ def inject[Ctx](
                     new_param_items = []
                     for item in param_val:
                         if isinstance(item, core.Jaxpr):
-                            inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                            inner_jaxpr, _, inner_consts = transform_jaxpr(
                                 item, modify_signature=False
                             )
                             new_param_items.append(inner_jaxpr)
@@ -314,7 +306,7 @@ def inject[Ctx](
                                 ]
                             )
                         elif isinstance(item, core.ClosedJaxpr):
-                            inner_jaxpr, inner_ctx_vars, inner_consts = transform_jaxpr(
+                            inner_jaxpr, _, inner_consts = transform_jaxpr(
                                 item.jaxpr, modify_signature=False
                             )
                             new_consts.extend(inner_consts)
@@ -355,10 +347,13 @@ def inject[Ctx](
 
                 # Trace through the injector with current ctx and token shape
                 # The token should be in the same format as what tag receives (unflattened)
-                def wrapper(c, *token_leaves):
+                def wrapper(c: Ctx, *token_leaves):
                     # Reconstruct the token in its original structure
                     token = jax.tree.unflatten(structure, token_leaves)
-                    return injector(c, token, params_dict)
+                    token, ctx = injector(c, token, params_dict)
+                    assert_tree_match(jax.tree.structure(token), structure)
+                    assert_tree_match(jax.tree.structure(ctx), ctx_struct)
+                    return token, ctx
 
                 inner_closed_jaxpr = jax.make_jaxpr(wrapper)(ctx, inshape)
                 inner_jaxpr: core.Jaxpr = inner_closed_jaxpr.jaxpr

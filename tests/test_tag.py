@@ -308,6 +308,43 @@ def test_inject_multiple_tags():
     assert "set" in injector_calls
 
 
+def test_inject_with_predicate():
+    """Test that inject only inlines injector for tags matching predicate."""
+
+    def fn(x):
+        a = tag(x + 1, op="keep", id=1)
+        b = tag(a * 2, op="inject", id=2)
+        return b + 3
+
+    closed = jax.make_jaxpr(fn)(jnp.array(2.0))
+
+    call_count = [0]
+
+    def injector(ctx, token, params):
+        call_count[0] += 1
+        # return token unchanged but increment ctx
+        return token, ctx + 1
+
+    def predicate(params, shape):
+        return params.get("op") == "inject"
+
+    injected = inject(closed, injector, jnp.array(0.0), predicate=predicate)
+
+    # Only the tag with op="keep" should remain in the jaxpr
+    remaining = list(iter_tags(injected.jaxpr))
+    assert len(remaining) == 1
+    assert remaining[0][0]["op"] == "keep"
+
+    # Injector should have been called exactly once (for the 'inject' tag)
+    # Execute the injected jaxpr: provide ctx and input
+    result, final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0)
+    )
+    assert call_count[0] == 1
+    # final_ctx should reflect a single increment
+    assert jnp.allclose(final_ctx, jnp.array(1.0))
+
+
 def test_inject_no_tags():
     """Test injection when there are no tags."""
 

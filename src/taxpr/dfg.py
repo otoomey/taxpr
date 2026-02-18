@@ -1,4 +1,5 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
+from typing import Any
 from jax.core import Atom
 from jax.extend import core
 
@@ -110,15 +111,15 @@ def _dfg(jaxpr: core.Jaxpr):
 
     return dfg, var_nodes
 
-def partition_out(jaxpr: core.ClosedJaxpr, outvar_indices: list[int]) -> list[core.ClosedJaxpr]:
+def partition_out(jaxpr: core.ClosedJaxpr, outvar_indices: list[list[int]]) -> list[core.ClosedJaxpr]:
     """
     Partition a ClosedJaxpr into multiple ClosedJaxprs, each computing a single outvar.
 
     Args:
         jaxpr: The ClosedJaxpr to partition.
-        outvar_indices: A list of indices of the outvars to partition.
+        outvar_indices: The list of outvar indices each partition should compute.
     Returns:
-        A list of ClosedJaxpr functions, each computing one of the specified outvars.
+        A list of ClosedJaxprs, each computing the specified outvars.
 
     """
     
@@ -126,12 +127,18 @@ def partition_out(jaxpr: core.ClosedJaxpr, outvar_indices: list[int]) -> list[co
     dfg, varmap = _dfg(jaxpr.jaxpr)
 
     functions = []
-    for i in outvar_indices:
-        outvar = jaxpr.jaxpr.outvars[i]
+    for group in outvar_indices:
+        outvars = [jaxpr.jaxpr.outvars[i] for i in group]
 
         # Include the node that produces the outvar as well as its ancestors
-        dependencies = set(rx.ancestors(dfg, varmap[outvar]))
-        dependencies.add(varmap[outvar])
+        dependencies = set()
+        for outvar in outvars:
+            # Only process Vars; Literals don't have nodes in the DFG
+            if isinstance(outvar, core.Var):
+                var_dep = set(rx.ancestors(dfg, varmap[outvar]))
+                # include the node that directly produces the outvar
+                var_dep.add(varmap[outvar])
+                dependencies.update(var_dep)
         
         func_eqns = []
 
@@ -143,7 +150,7 @@ def partition_out(jaxpr: core.ClosedJaxpr, outvar_indices: list[int]) -> list[co
         func_jaxpr = core.Jaxpr(
             constvars=jaxpr.jaxpr.constvars,
             invars=jaxpr.jaxpr.invars,
-            outvars=[outvar],
+            outvars=list(outvars),
             eqns=func_eqns,
             effects=jaxpr.jaxpr.effects,
             debug_info=jaxpr.jaxpr.debug_info,
@@ -154,3 +161,49 @@ def partition_out(jaxpr: core.ClosedJaxpr, outvar_indices: list[int]) -> list[co
         functions.append(closed_jaxpr)
 
     return functions
+
+def partial(jaxpr: core.ClosedJaxpr, /, args: dict[int, Any]):
+    """
+    Partially evaluate a ClosedJaxpr by fixing certain input arguments.
+
+    Similar to functools.partial, but for JAX ClosedJaxprs.
+
+    Args:
+        jaxpr: The ClosedJaxpr to partially evaluate.
+        args: A dictionary mapping input argument indices to their fixed values.
+
+    Returns:
+        A new ClosedJaxpr with the specified inputs fixed. The number of inputs
+        in the returned jaxpr is the original number of inputs minus the number of fixed inputs.
+    """
+    varmap = {}
+    new_invars = []
+
+    for i, invar in enumerate(jaxpr.jaxpr.invars):
+        if i in args:
+            varmap[invar] = core.Literal(args[i], invar.aval)
+        else:
+            new_invars.append(invar)
+
+    new_jaxpr = rewrite_vars(jaxpr.jaxpr, varmap)
+    new_jaxpr = new_jaxpr.replace(invars=new_invars)
+
+    return core.ClosedJaxpr(new_jaxpr, jaxpr.consts)
+
+def strip_outputs(jaxpr: core.ClosedJaxpr, /, indices: Set[int]):
+    """
+    Strip specified outputs from a ClosedJaxpr.
+
+    Args:
+        jaxpr: The ClosedJaxpr to strip outputs from.
+        indices: A set of output indices to remove.
+    Returns:
+        A new ClosedJaxpr with the specified outputs removed.
+    """
+    new_outvars = [
+        var for i, var in enumerate(jaxpr.jaxpr.outvars) if i not in indices
+    ]
+
+    new_jaxpr = jaxpr.jaxpr.replace(outvars=new_outvars)
+
+    return core.ClosedJaxpr(new_jaxpr, jaxpr.consts)

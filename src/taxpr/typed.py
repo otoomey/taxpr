@@ -9,7 +9,7 @@ from jax.extend import core
 from jaxtyping import Array, PyTree
 
 from taxpr.dfg import partition_out
-from taxpr.tag import transpose
+from taxpr.tag import inject, transpose
 
 def _to_shape(pytree: PyTree) -> PyTree:
     return jax.tree.map(lambda x: jax.ShapeDtypeStruct(shape=x.shape, dtype=x.dtype), pytree)
@@ -50,6 +50,12 @@ class TypedClosedJaxpr[*T, R]:
             out = self.eval(*args)
             return map(out)
         return TypedClosedJaxpr.make(new_fn, self.static_argnums)(*self.in_shape)
+
+    def inject[Ctx](self, injector: Callable[[Ctx, Any, dict[str, Any]], tuple[Any, Ctx]], ctx: Ctx) -> "TypedClosedJaxpr[tuple[Ctx, *T], tuple[R, Ctx]]":
+        closed_jaxpr = inject(self.closed_jaxpr, injector, ctx)
+        in_shape = _to_shape((ctx, *self.in_shape))
+        out_shape = _to_shape((self.out_shape, ctx))
+        return TypedClosedJaxpr(in_shape, closed_jaxpr, out_shape, static_argnums=self.static_argnums)
         
 def tcj_transpose[*T, R](tcj: TypedClosedJaxpr[*T, R]) -> tuple[TypedClosedJaxpr[*T, list[PyTree[Array]]], list[dict[str, Any]]]:
     new_closed_jaxpr, outvar_params, outvar_structs = transpose(tcj.closed_jaxpr)

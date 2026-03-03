@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taxpr"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
   { name="Oscar Toomey" },
 ]
@@ -35,6 +35,12 @@ tests = [
   "jaxlib",
   "pytest"
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"taxpr" = ["py.typed"]
 
 [tool.basedpyright]
 include = ["src"]

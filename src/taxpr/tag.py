@@ -13,6 +13,16 @@ from taxpr.util import assert_tree_match
 tag_p = core.Primitive("tag")
 
 
+def _rebuild_param_seq(original, new_items: list):
+    """Reconstruct a list/tuple/namedtuple preserving the original type."""
+    if isinstance(original, list):
+        return list(new_items)
+    elif type(original) is not tuple:  # NamedTuple or other tuple subclass
+        return type(original)(*new_items)
+    else:
+        return tuple(new_items)
+
+
 def _tag_p_impl(*token, user_params, structure):
     return tuple(token)
 
@@ -128,20 +138,19 @@ def dissolve_tags(
                         core.ClosedJaxpr(dissolve_tags(p.jaxpr), p.consts)
                     )
                 elif isinstance(p, tuple):
-                    param_vals.append(
-                        tuple(
-                            (
-                                dissolve_tags(x)
-                                if isinstance(x, core.Jaxpr)
-                                else (
-                                    core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
-                                    if isinstance(x, core.ClosedJaxpr)
-                                    else x
-                                )
+                    new_items = [
+                        (
+                            dissolve_tags(x)
+                            if isinstance(x, core.Jaxpr)
+                            else (
+                                core.ClosedJaxpr(dissolve_tags(x.jaxpr), x.consts)
+                                if isinstance(x, core.ClosedJaxpr)
+                                else x
                             )
-                            for x in p
                         )
-                    )
+                        for x in p
+                    ]
+                    param_vals.append(_rebuild_param_seq(p, new_items))
                 elif isinstance(p, list):
                     param_vals.append(
                         list(
@@ -327,11 +336,7 @@ def inject[Ctx](
                             )
                         else:
                             new_param_items.append(item)
-                    new_params[param_name] = (
-                        type(param_val)(new_param_items)
-                        if isinstance(param_val, list)
-                        else tuple(new_param_items)
-                    )
+                    new_params[param_name] = _rebuild_param_seq(param_val, new_param_items)
                 else:
                     new_params[param_name] = param_val
 
@@ -501,7 +506,7 @@ def transpose(
                             items.append(core.ClosedJaxpr(inner_jaxpr, item.consts))
                         else:
                             items.append(item)
-                    new_params[name] = type(val)(items) if isinstance(val, list) else tuple(items)
+                    new_params[name] = _rebuild_param_seq(val, items)
                 else:
                     new_params[name] = val
 
@@ -623,7 +628,7 @@ def transpose(
                                     extra_outvars_for_eqn.append(core.Var(v.aval))
                         else:
                             new_items.append(item)
-                    new_params[name] = type(val)(new_items) if isinstance(val, list) else tuple(new_items)
+                    new_params[name] = _rebuild_param_seq(val, new_items)
                 else:
                     new_params[name] = val
 

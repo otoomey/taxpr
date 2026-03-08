@@ -267,16 +267,20 @@ def test_inject_with_context():
     # Injector that increments context
     def injector(ctx, token, params):
         # token is now in its original structure (scalar in this case)
-        ctx = ctx + token
-        return token, ctx
+        ctx0, ctx1 = ctx
+        ctx0 = ctx0 + token
+        return token, (ctx0, ctx1)
 
-    injected = inject(closed, injector, jnp.array(0.0))
-    result, final_ctx = eval_jaxpr(
-        injected.jaxpr, injected.consts, jnp.array(0.0), jnp.array(2.0)
+    extra = jnp.array(0, dtype=jnp.int8).reshape((1, 1))
+
+    injected = inject(closed, injector, (jnp.array(0.0), jax.ShapeDtypeStruct((1, 1), dtype=jnp.int8)))
+    result, *final_ctx = eval_jaxpr(
+        injected.jaxpr, injected.consts, jnp.array(0.0), extra, jnp.array(2.0)
     )
 
     # Context should be updated by adding the token (2.0)
-    assert jnp.allclose(final_ctx, jnp.array(2.0))
+    assert jnp.allclose(final_ctx[0], jnp.array(2.0))
+    assert jnp.allclose(final_ctx[1], extra)
     # Result should be x + 1 where x = 2.0, so 3.0
     assert jnp.allclose(result, jnp.array(3.0))
 

@@ -241,7 +241,7 @@ def inject[Ctx](
         the final context as an additional output.
     """
     # Convert context leaves to arrays so they can be traced through make_jaxpr
-    ctx = jax.tree.map(lambda x: jax.numpy.array(x), ctx)
+    ctx = jax.tree.map(lambda x: jax.numpy.array(x) if not isinstance(x, jax.ShapeDtypeStruct) else x, ctx)
 
     # Flatten context to get individual variables
     ctx_flattened, ctx_struct = jax.tree.flatten(ctx)
